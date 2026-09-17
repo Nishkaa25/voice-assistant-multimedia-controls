@@ -1,6 +1,6 @@
 # Voice Assistant for MultiMedia Controls
 
-## Team 15 - Software Engineering
+## 5 B - Team 15 - Software Engineering
 
 A hardware-based voice assistant designed to provide hands-free
 control of multimedia playback through voice commands.
