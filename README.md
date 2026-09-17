@@ -8,7 +8,7 @@ control of multimedia playback through voice commands.
 ## Team Members
 
 - C K Gagan Gowda
-- Anudeepak Anpuaraja
+- Anudeepak Anpuraja
 - Nishkaa V
 - Ishanika Vinuthan
 
