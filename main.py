@@ -42,6 +42,7 @@ def main():
         sys.exit(1)
 
     command_parser = CommandParser()
+    media_controller = MediaController()
 
     try:
         while True:
