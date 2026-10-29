@@ -1,49 +1,67 @@
+
+import re
+
+
 class CommandParser:
     def __init__(self):
         """
-        FR-12, FR-11, UC-09, UC-10: Command Parser & Intent Mapper.
-        Maps spoken words/phrases to normalized internal media intents.
+        Maps supported spoken phrases to internal command identifiers.
+        Unsupported or ambiguous phrases return None.
         """
         self.intent_map = {
+            # Playback
             "play": "PLAY",
             "start": "PLAY",
-            "resume": "PLAY",
+            "play music": "PLAY",
+
             "pause": "PAUSE",
+            "pause playback": "PAUSE",
             "stop": "PAUSE",
+
+            "resume": "RESUME",
+            "continue": "RESUME",
+            "resume playback": "RESUME",
+
+            # Volume
             "volume up": "VOLUME_UP",
             "increase volume": "VOLUME_UP",
             "louder": "VOLUME_UP",
+
             "volume down": "VOLUME_DOWN",
             "decrease volume": "VOLUME_DOWN",
             "quieter": "VOLUME_DOWN",
+
+            # Mute controls
             "mute": "MUTE",
-            "unmute": "MUTE",
+            "mute audio": "MUTE",
+
+            "unmute": "UNMUTE",
+            "unmute audio": "UNMUTE",
+
+            # Track navigation
             "next": "NEXT",
             "next track": "NEXT",
             "skip": "NEXT",
+
             "previous": "PREVIOUS",
             "previous track": "PREVIOUS",
-            "back": "PREVIOUS"
+            "back": "PREVIOUS",
         }
 
     def parse_intent(self, phrase):
         """
-        Validates spoken phrase against vocabulary map.
-        Returns mapped intent string or None if unrecognized (FR-11).
+        Convert a recognized phrase into a command identifier.
+
+        Returns:
+            A command identifier if the phrase is supported.
+            None if the phrase is empty, unsupported, or ambiguous.
         """
-        if not phrase:
+        if not isinstance(phrase, str) or not phrase.strip():
             return None
 
-        clean_phrase = phrase.strip().lower()
+        # Normalize case, punctuation and extra spaces.
+        clean_phrase = re.sub(r"[^a-z0-9\s]", "", phrase.lower())
+        clean_phrase = " ".join(clean_phrase.split())
 
-        # Direct string lookup
-        if clean_phrase in self.intent_map:
-            return self.intent_map[clean_phrase]
-
-        # Partial phrase matching
-        for keyword, intent in self.intent_map.items():
-            if keyword in clean_phrase:
-                return intent
-
-        # FR-11 / UC-10: Unrecognized Command Fallback
-        return None
+        # Exact matching prevents accidental commands from substrings.
+        return self.intent_map.get(clean_phrase)

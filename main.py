@@ -17,12 +17,31 @@ def main():
 
     # Initialize modules
     audio_capturer = AudioCapturer(sample_rate=16000, blocksize=4000)
-    voice_engine = VoiceEngine(model_path="model", sample_rate=16000, wake_word="assistant")
-    command_parser = CommandParser()
-    media_controller = MediaController()
+        # Initialize modules
+    try:
+        voice_engine = VoiceEngine(
+            model_path="model",
+            sample_rate=16000,
+            wake_word="assistant",
+        )
+    except (FileNotFoundError, RuntimeError) as exc:
+        print(f"[STARTUP ERROR] {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    audio_capturer = AudioCapturer(
+        sample_rate=16000,
+        blocksize=4000,
+    )
 
     if not audio_capturer.start_stream():
+        audio_capturer.stop_stream()
+        print(
+            "[STARTUP ERROR] Unable to start microphone.",
+            file=sys.stderr,
+        )
         sys.exit(1)
+
+    command_parser = CommandParser()
 
     try:
         while True:
