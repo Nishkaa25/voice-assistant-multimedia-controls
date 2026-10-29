@@ -1,11 +1,26 @@
-import pyautogui
+from pynput.keyboard import Key, Controller
 from src.feedback_handler import FeedbackHandler
 
-class MediaController:
-    def __init__(self):
-        # Configure pyautogui safety pause
-        pyautogui.PAUSE = 0.05
+keyboard = Controller()
 
+KEY_MAP = {
+    "PLAY": Key.media_play_pause,
+    "PAUSE": Key.media_play_pause,
+    "RESUME": Key.media_play_pause,
+    "VOLUME_UP": Key.media_volume_up,
+    "VOLUME_DOWN": Key.media_volume_down,
+    "MUTE": Key.media_volume_mute,
+    "NEXT": Key.media_next,
+    "PREVIOUS": Key.media_previous,
+}
+
+
+def _press(key):
+    keyboard.press(key)
+    keyboard.release(key)
+
+
+class MediaController:
     def execute_intent(self, intent):
         """
         FR-04 through FR-09, FR-13, FR-14: Maps intents to OS Media Keys.
@@ -18,22 +33,12 @@ class MediaController:
         intent = intent.upper()
         print(f"[MEDIA CONTROLLER] Executing OS Key Action: {intent}")
 
-        if intent == "PLAY" or intent == "PAUSE":
-            pyautogui.press("playpause")
-        elif intent == "VOLUME_UP":
-            pyautogui.press("volumeup")
-        elif intent == "VOLUME_DOWN":
-            pyautogui.press("volumedown")
-        elif intent == "MUTE":
-            pyautogui.press("volumemute")
-        elif intent == "NEXT":
-            pyautogui.press("nexttrack")
-        elif intent == "PREVIOUS":
-            pyautogui.press("prevtrack")
-        else:
+        key = KEY_MAP.get(intent)
+        if key is None:
             print(f"[MEDIA ERROR] Invalid Intent: {intent}")
             FeedbackHandler.play_error_chime()
             return False
 
+        _press(key)
         FeedbackHandler.play_success_chime()
         return True
