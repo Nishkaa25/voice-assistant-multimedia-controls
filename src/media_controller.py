@@ -18,7 +18,7 @@ class MediaController:
         intent = intent.upper()
         print(f"[MEDIA CONTROLLER] Executing OS Key Action: {intent}")
 
-        if intent == "PLAY" or intent == "PAUSE":
+        if intent in ("PLAY", "PAUSE", "RESUME"):
             pyautogui.press("playpause")
         elif intent == "VOLUME_UP":
             pyautogui.press("volumeup")
