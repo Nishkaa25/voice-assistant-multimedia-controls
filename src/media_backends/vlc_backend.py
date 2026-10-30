@@ -23,7 +23,18 @@ class VLCBackend:
         self.session.timeout = 3
 
         # Verify that the existing VLC instance is reachable.
-        self._request("status.json")
+        try:
+            self._request("status.json")
+            print("[VLC] Connected successfully.")
+
+            if not self.enable_looping():
+                print("[VLC WARNING] Could not enable playlist looping.")
+
+        except RequestException as exc:
+            self.session.close()
+            raise RuntimeError(
+                f"Could not connect to VLC at {self.base_url}: {exc}"
+            ) from exc
 
     def _request(self, endpoint, **params):
         response = self.session.get(
@@ -79,5 +90,18 @@ class VLCBackend:
             print(f"[VLC ERROR] Could not unmute VLC: {exc}")
             return False
 
+    def enable_looping(self):
+        """Enable VLC playlist looping if it is not already enabled."""
+        try:
+            status = self._request("status.json").json()
+
+            if not status.get("loop", False):
+                self._request("status.json", command="pl_loop")
+
+            return True
+        except (RequestException, ValueError) as exc:
+            print(f"[VLC ERROR] Could not enable playlist looping: {exc}")
+            return False
+        
     def close(self):
         self.session.close()
