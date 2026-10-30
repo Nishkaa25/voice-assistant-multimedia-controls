@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 from src.audio_capture import AudioCapturer
@@ -5,6 +6,9 @@ from src.voice_engine import VoiceEngine
 from src.command_parser import CommandParser
 from src.media_controller import MediaController
 from src.feedback_handler import FeedbackHandler
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def main():
     print("==================================================")
@@ -42,7 +46,16 @@ def main():
         sys.exit(1)
 
     command_parser = CommandParser()
-    media_controller = MediaController()
+    media_backend = os.getenv("MEDIA_BACKEND", "os").lower()
+    media_controller = MediaController(backend=media_backend)
+    print(f"[CONFIG] Media backend: {media_backend.upper()}")
+
+    try:
+        media_controller = MediaController(backend=media_backend)
+    except Exception as exc:
+        print(f"[STARTUP ERROR] Could not initialize media controller: {exc}")
+        audio_capturer.stop_stream()
+        sys.exit(1)
 
     try:
         while True:
@@ -76,6 +89,7 @@ def main():
         print("\n[SHUTDOWN] Stopping Voice Assistant...")
     finally:
         audio_capturer.stop_stream()
+        media_controller.close() #release VLC instance upon application exit
         print("[SHUTDOWN] Clean exit complete.")
 
 if __name__ == "__main__":
