@@ -43,7 +43,7 @@ class MediaController:
         NF-1: Execution latency <= 1.5 seconds.
         """
         if not intent:
-            FeedbackHandler.play_error_chime()
+            FeedbackHandler.play_error_chime("No command was recognized.")
             return False
 
         intent = intent.upper()
@@ -53,25 +53,30 @@ class MediaController:
             try:
                 success = self.vlc_backend.execute_intent(intent)
             except Exception as exc:
-                print(f"[MEDIA ERROR] VLC operation failed: {exc}")
+                FeedbackHandler.play_error_chime(f"VLC operation failed: {exc}")        
                 success = False
 
             if success:
                 FeedbackHandler.play_success_chime()
             else:
-                FeedbackHandler.play_error_chime()
+                FeedbackHandler.play_error_chime(f"Could not execute command: {intent}.")
 
             return success
         
         key = KEY_MAP.get(intent)
         if key is None:
-            print(f"[MEDIA ERROR] Invalid Intent: {intent}")
-            FeedbackHandler.play_error_chime()
+            FeedbackHandler.play_error_chime(f"Unrecognized media command: {intent}.")
             return False
-
-        _press(key)
-        FeedbackHandler.play_success_chime()
-        return True
+        try:
+            _press(key)
+            FeedbackHandler.play_success_chime()
+            return True
+        except Exception as exc:
+            print(f"[MEDIA ERROR] Could not execute {intent}: {exc}")
+            FeedbackHandler.play_error_chime(
+                f"Could not execute {intent}: {exc}"
+            )
+            return False
     
     def close(self):
         """Release backend resources."""

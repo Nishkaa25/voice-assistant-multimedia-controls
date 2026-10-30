@@ -17,9 +17,8 @@ class FeedbackHandler:
             print("\a")
 
     @staticmethod
-    def play_error_chime():
-        """FR-11 / NF-4: Audio feedback for unrecognized commands."""
-        print("[FEEDBACK] Unrecognized Command (440 Hz Error Tone)")
+    def play_error_chime(message="An error occurred."):
+        print(f"[ERROR] {message}")
         if HAS_WINSOUND:
             winsound.Beep(440, 250)
         else:

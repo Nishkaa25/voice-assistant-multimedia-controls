@@ -45,15 +45,45 @@ class VLCBackend:
         response.raise_for_status()
         return response
 
+    def _has_tracks(self):
+        try:
+            playlist = self._get_playlist()
+            items = playlist.get("children", [])
+
+            for item in items:
+                if item.get("type") == "leaf":
+                    return True
+
+                if any(
+                    child.get("type") == "leaf"
+                    for child in item.get("children", [])
+                ):
+                    return True
+
+            return False
+
+        except (RequestException, ValueError) as exc:
+            print(f"[VLC ERROR] Could not read playlist: {exc}")
+            return None
+
+        except (RequestException, ValueError) as exc:
+            print(f"[VLC ERROR] Could not read playlist: {exc}")
+            return None
+        
     def execute_intent(self, intent):
         intent = intent.upper()
+        has_tracks = self._has_tracks()
 
+        if has_tracks is False:
+            print("[VLC] Playlist is empty.")
+            return False
+
+        if has_tracks is None:
+            return False
         commands = {
             "PLAY": ("status.json", {"command": "pl_play"}),
             "RESUME": ("status.json", {"command": "pl_forceresume"}),
             "PAUSE": ("status.json", {"command": "pl_forcepause"}),
-            "NEXT": ("status.json", {"command": "pl_next"}),
-            "PREVIOUS": ("status.json", {"command": "pl_previous"}),
             "VOLUME_UP": ("status.json", {"command": "volume", "val": "+10"}),
             "VOLUME_DOWN": ("status.json", {"command": "volume", "val": "-10"}),
             "MUTE": ("status.json", {"command": "volume", "val": "0"}),
@@ -61,7 +91,10 @@ class VLCBackend:
 
         if intent == "UNMUTE":
             return self._unmute()
-
+        
+        if intent in ("NEXT", "PREVIOUS"):
+            return self._navigate(intent)
+        
         if intent not in commands:
             print(f"[VLC ERROR] Unsupported intent: {intent}")
             return False
@@ -74,7 +107,34 @@ class VLCBackend:
         except RequestException as exc:
             print(f"[VLC ERROR] HTTP command failed: {exc}")
             return False
+    def _get_playlist(self):
+        response = self._request("playlist.json")
+        return response.json()
+    
+    def _navigate(self, intent):
+        try:
+            playlist = self._get_playlist()
+            items = playlist.get("children", [])
 
+            # VLC's playlist response may contain nested groups, for the mvp we will only
+            # handle direct file uploads(in VLC that means choosing multiple files, no folders or no nested folders)
+            items = [
+                item
+                for item in items
+                if item.get("type") == "leaf"
+            ]
+
+            if len(items) == 1:
+                print("[VLC] Only one track in playlist.")
+                return True
+
+            command = "pl_next" if intent == "NEXT" else "pl_previous"
+            self._request("status.json", command=command)
+            return True
+
+        except (RequestException, ValueError) as exc:
+            print(f"[VLC ERROR] Navigation failed: {exc}")
+            return False
     def _unmute(self):
         try:
             status = self._request("status.json").json()
