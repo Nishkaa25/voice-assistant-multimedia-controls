@@ -3,6 +3,29 @@ from requests import Session
 from requests.auth import HTTPBasicAuth
 from requests.exceptions import RequestException
 
+TRACK_COMMANDS = {
+    "PLAY",
+    "RESUME",
+    "PAUSE",
+    "NEXT",
+    "PREVIOUS",
+}
+
+VOLUME_COMMANDS = {
+    "VOLUME_UP",
+    "VOLUME_DOWN",
+    "MUTE",
+    "UNMUTE",
+}
+
+COMMANDS = {
+    "PLAY": ("status.json", {"command": "pl_play"}),
+    "RESUME": ("status.json", {"command": "pl_forceresume"}),
+    "PAUSE": ("status.json", {"command": "pl_forcepause"}),
+    "VOLUME_UP": ("status.json", {"command": "volume", "val": "+10"}),
+    "VOLUME_DOWN": ("status.json", {"command": "volume", "val": "-10"}),
+    "MUTE": ("status.json", {"command": "volume", "val": "0"}),
+}
 
 class VLCBackend:
     """Control an existing VLC instance through its HTTP interface."""
@@ -65,41 +88,32 @@ class VLCBackend:
         except (RequestException, ValueError) as exc:
             print(f"[VLC ERROR] Could not read playlist: {exc}")
             return None
-
-        except (RequestException, ValueError) as exc:
-            print(f"[VLC ERROR] Could not read playlist: {exc}")
-            return None
         
     def execute_intent(self, intent):
         intent = intent.upper()
-        has_tracks = self._has_tracks()
 
-        if has_tracks is False:
-            print("[VLC] Playlist is empty.")
-            return False
-
-        if has_tracks is None:
-            return False
-        commands = {
-            "PLAY": ("status.json", {"command": "pl_play"}),
-            "RESUME": ("status.json", {"command": "pl_forceresume"}),
-            "PAUSE": ("status.json", {"command": "pl_forcepause"}),
-            "VOLUME_UP": ("status.json", {"command": "volume", "val": "+10"}),
-            "VOLUME_DOWN": ("status.json", {"command": "volume", "val": "-10"}),
-            "MUTE": ("status.json", {"command": "volume", "val": "0"}),
-        }
-
-        if intent == "UNMUTE":
-            return self._unmute()
-        
-        if intent in ("NEXT", "PREVIOUS"):
-            return self._navigate(intent)
-        
-        if intent not in commands:
+        if intent not in TRACK_COMMANDS | VOLUME_COMMANDS:
             print(f"[VLC ERROR] Unsupported intent: {intent}")
             return False
 
-        endpoint, params = commands[intent]
+        # Only playback and track navigation require a loaded track.
+        if intent in TRACK_COMMANDS:
+            has_tracks = self._has_tracks()
+
+            if has_tracks is False:
+                print("[VLC] Playlist is empty.")
+                return False
+
+            if has_tracks is None:
+                return False
+
+        if intent == "UNMUTE":
+            return self._unmute()
+
+        if intent in ("NEXT", "PREVIOUS"):
+            return self._navigate(intent)
+
+        endpoint, params = COMMANDS[intent]
 
         try:
             self._request(endpoint, **params)
@@ -107,6 +121,7 @@ class VLCBackend:
         except RequestException as exc:
             print(f"[VLC ERROR] HTTP command failed: {exc}")
             return False
+        
     def _get_playlist(self):
         response = self._request("playlist.json")
         return response.json()
