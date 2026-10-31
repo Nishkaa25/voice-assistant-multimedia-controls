@@ -9,3 +9,6 @@ pynput>=1.7.6
 pyserial>=3.5
 pytest>=7.0.0
 pynput
+python-vlc>=3.0.0
+requests
+python-dotenv
