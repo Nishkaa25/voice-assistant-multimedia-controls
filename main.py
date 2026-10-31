@@ -19,8 +19,6 @@ def main():
     print(" Press Ctrl+C to exit")
     print("==================================================\n")
 
-    # Initialize modules
-    audio_capturer = AudioCapturer(sample_rate=16000, blocksize=4000)
         # Initialize modules
     try:
         voice_engine = VoiceEngine(
@@ -47,7 +45,6 @@ def main():
 
     command_parser = CommandParser()
     media_backend = os.getenv("MEDIA_BACKEND", "os").lower()
-    media_controller = MediaController(backend=media_backend)
     print(f"[CONFIG] Media backend: {media_backend.upper()}")
 
     try:
