@@ -24,7 +24,6 @@ COMMANDS = {
     "PAUSE": ("status.json", {"command": "pl_forcepause"}),
     "VOLUME_UP": ("status.json", {"command": "volume", "val": "+10"}),
     "VOLUME_DOWN": ("status.json", {"command": "volume", "val": "-10"}),
-    "MUTE": ("status.json", {"command": "volume", "val": "0"}),
 }
 
 class VLCBackend:
@@ -34,6 +33,8 @@ class VLCBackend:
         self.base_url = os.getenv(
             "VLC_HTTP_URL", "http://localhost:8080"
         ).rstrip("/")
+
+        self.previous_volume = None
 
         password = os.getenv("VLC_HTTP_PASSWORD")
         if not password:
@@ -107,6 +108,8 @@ class VLCBackend:
             if has_tracks is None:
                 return False
 
+        if intent == "MUTE":
+            return self._mute()
         if intent == "UNMUTE":
             return self._unmute()
 
@@ -150,16 +153,37 @@ class VLCBackend:
         except (RequestException, ValueError) as exc:
             print(f"[VLC ERROR] Navigation failed: {exc}")
             return False
+        
+    def _mute(self):
+        try:
+            status = self._request("status.json").json()
+            current_volume = status.get("volume", 0)
+
+            if current_volume > 0:
+                self.previous_volume = current_volume
+                self._request(
+                    "status.json", command="volume", val="0"
+                )
+            return True
+        
+        except (RequestException, ValueError) as exc:
+            print(f"[VLC ERROR] Could not mute VLC: {exc}")
+            return False
+
+
     def _unmute(self):
         try:
             status = self._request("status.json").json()
-            current_volume = status.get("volume", 100)
+            current_volume = status.get("volume", 0)
 
-            # VLC reports volume as an integer, commonly 0 to 512.
-            if current_volume == 0:
+            if current_volume == 0 and self.previous_volume is not None:
                 self._request(
-                    "status.json", command="volume", val="256"
+                    "status.json",
+                    command="volume",
+                    val=str(self.previous_volume),
                 )
+                self.previous_volume = None
+
             return True
         except (RequestException, ValueError) as exc:
             print(f"[VLC ERROR] Could not unmute VLC: {exc}")
