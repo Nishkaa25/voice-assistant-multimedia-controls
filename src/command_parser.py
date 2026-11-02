@@ -34,9 +34,12 @@ class CommandParser:
             # Mute controls
             "mute": "MUTE",
             "mute audio": "MUTE",
+            "quiet": "MUTE",
 
             "unmute": "UNMUTE",
             "unmute audio": "UNMUTE",
+            "clear volume": "UNMUTE",
+            "speak": "UNMUTE",
 
             # Track navigation
             "next": "NEXT",
