@@ -37,6 +37,7 @@ class CommandParser:
 
             "unmute": "UNMUTE",
             "unmute audio": "UNMUTE",
+            "clear volume": "UNMUTE",
 
             # Track navigation
             "next": "NEXT",
