@@ -90,6 +90,56 @@ class VLCBackend:
             print(f"[VLC ERROR] Could not read playlist: {exc}")
             return None
         
+    @staticmethod
+    def find_track(items, current_id):
+        for item in items:
+            if str(item.get("id")) == str(current_id):
+                return item
+
+            children = item.get("children", [])
+            result = VLCBackend.find_track(children, current_id)
+
+            if result:
+                return result
+
+        return None
+    def get_current_track(self):
+        """Return the title of the currently playing VLC track."""
+        try:
+            status = self._request("status.json").json()
+            current_id = status.get("currentplid")
+
+            if current_id is None:
+                return None
+
+            playlist = self._get_playlist()
+            track = self.find_track(playlist.get("children", []),current_id)
+
+            if track:
+                return (
+                    track.get("name")
+                    or track.get("uri", "").split("/")[-1]
+                    or None
+                )
+
+            return None
+
+        except (RequestException, ValueError) as exc:
+            print(f"[VLC ERROR] Could not retrieve current track: {exc}")
+            return None
+
+    def get_volume(self):
+        """Return VLC's current volume as a percentage."""
+        try:
+            status = self._request("status.json").json()
+            volume = status.get("volume", 0)
+            volume_percent = round((volume / 256) * 100)
+            return volume_percent
+
+        except (RequestException, ValueError) as exc:
+            print(f"[VLC ERROR] Could not retrieve volume: {exc}")
+            return None
+           
     def execute_intent(self, intent):
         intent = intent.upper()
 
