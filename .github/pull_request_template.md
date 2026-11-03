@@ -1,6 +1,10 @@
 ## Sprint
 - **Sprint:** <!-- Sprint number/name -->
 
+## Related Issues
+Closes #
+Closes #
+
 ## Backlogs Addressed
 
 ### Backlog 01
