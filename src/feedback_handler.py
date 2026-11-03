@@ -1,25 +1,31 @@
-import sys
-
+"""FR-10 / NF-4: Audio feedback for executed commands."""
 try:
     import winsound
     HAS_WINSOUND = True
 except ImportError:
     HAS_WINSOUND = False
 
+
 class FeedbackHandler:
-    @staticmethod
-    def play_success_chime():
-        """FR-10 / NF-4: Audio feedback for executed commands."""
-        print("[FEEDBACK] Command Executed (880 Hz Chime)")
-        if HAS_WINSOUND:
-            winsound.Beep(880, 150)
-        else:
-            print("\a")
 
     @staticmethod
-    def play_error_chime(message="An error occurred."):
-        print(f"[ERROR] {message}")
+    def _beep(frequency=1000, duration=100):
         if HAS_WINSOUND:
-            winsound.Beep(440, 250)
+            winsound.Beep(frequency, duration)
         else:
-            print("\a")
+            print("\a", end="", flush=True)
+
+    @staticmethod
+    def success(message):
+        print(f"[SUCCESS] {message}")
+        FeedbackHandler._beep(880, 150)
+
+    @staticmethod
+    def failure(message):
+        print(f"[ERROR] {message}")
+        FeedbackHandler._beep(440, 250)
+
+    @staticmethod
+    def rejected(message):
+        print(f"[REJECTED] {message}")
+        FeedbackHandler._beep(600, 250)

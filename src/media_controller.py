@@ -15,6 +15,19 @@ KEY_MAP = {
     "PREVIOUS": Key.media_previous,
 }
 
+#this is i think for os media keys
+messages = {
+    "PLAY": "Playback started.",
+    "PAUSE": "Playback paused.",
+    "RESUME": "Playback resumed.",
+    "NEXT": "Skipped to next track.",
+    "PREVIOUS": "Returned to previous track.",
+    "MUTE": "Audio muted.",
+    "UNMUTE": "Audio unmuted.",
+    "VOLUME_UP": "Volume up command sent.",
+    "VOLUME_DOWN": "Volume down command sent.",
+}
+
 
 def _press(key):
     keyboard.press(key)
@@ -41,50 +54,101 @@ class MediaController:
         NF-1: Execution latency <= 1.5 seconds.
         """
         if not intent:
-            FeedbackHandler.play_error_chime("No command was recognized.")
+            FeedbackHandler.rejected("No command was recognized.")
             return False
 
         intent = intent.upper()
-        print(f"[MEDIA CONTROLLER] Executing {self.backend.upper()} action: {intent}")
+
+        if intent not in KEY_MAP:
+            FeedbackHandler.rejected(
+                f"Unsupported media command: {intent}."
+            )
+            return False
+
+        print(
+            f"[MEDIA CONTROLLER] Executing "
+            f"{self.backend.upper()} action: {intent}"
+        )
 
         if self.backend == "vlc":
             try:
                 success = self.vlc_backend.execute_intent(intent)
             except Exception as exc:
-                FeedbackHandler.play_error_chime(f"VLC operation failed: {exc}")        
-                success = False
+                FeedbackHandler.failure(
+                    f"Could not execute {intent.lower()}: {exc}"
+                )
+                return False
 
-            if success:
-                FeedbackHandler.play_success_chime()
+            if not success:
+                FeedbackHandler.failure(
+                    f"Could not execute {intent.lower()}."
+                )
+                return False
+
+            if intent in ("VOLUME_UP", "VOLUME_DOWN"):
+                volume = self.vlc_backend.get_volume()
+
+                if volume is not None:
+                    FeedbackHandler.success(
+                        f"Volume: {volume}%"
+                    )
+                else:
+                    FeedbackHandler.success(
+                        "Volume command dispatched."
+                    )
+
+            elif intent in ("NEXT", "PREVIOUS"):
+                title = self.vlc_backend.get_current_track()
+
+                if title:
+                    FeedbackHandler.success(
+                        f"Now playing: {title}"
+                    )
+                else:
+                    FeedbackHandler.success(
+                        messages[intent]
+                    )
+
             else:
-                FeedbackHandler.play_error_chime(f"Could not execute command: {intent}.")
+                FeedbackHandler.success(messages[intent])
 
-            return success
-        
-        # Idempotency guard for OS backend
+            return True
+
+        # OS backend: sending a media key does not verify
+        # the resulting state in the media application.
+
         if intent == "MUTE":
             if self.is_muted:
-                FeedbackHandler.play_success_chime()
+                FeedbackHandler.success("Microphone already muted.")
                 return True
             self.is_muted = True
+
         elif intent == "UNMUTE":
             if not self.is_muted:
-                FeedbackHandler.play_success_chime()
+                FeedbackHandler.success("Microphone already unmuted.")
                 return True
             self.is_muted = False
 
-        key = KEY_MAP.get(intent)
-        if key is None:
-            FeedbackHandler.play_error_chime(f"Unrecognized media command: {intent}.")
-            return False
+        key = KEY_MAP[intent]
+
         try:
             _press(key)
-            FeedbackHandler.play_success_chime()
+
+            if intent in ("VOLUME_UP", "VOLUME_DOWN"):
+                FeedbackHandler.success(
+                    f"{messages.get(intent, intent)} command dispatched."
+                )
+            else:
+                FeedbackHandler.success(
+                    f"{messages.get(intent, intent)} "
+                    "command dispatched."
+                )
+
             return True
+
         except Exception as exc:
-            print(f"[MEDIA ERROR] Could not execute {intent}: {exc}")
-            FeedbackHandler.play_error_chime(
-                f"Could not execute {intent}: {exc}"
+            FeedbackHandler.failure(
+                f"Could not execute {intent.lower()}: {exc}"
             )
             return False
     

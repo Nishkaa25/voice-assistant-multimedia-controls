@@ -77,10 +77,10 @@ def main():
                             # 5. Execute OS media command
                             media_controller.execute_intent(intent)
                         else:
-                            print(f"[STATUS] Unrecognized Command Phrase: '{phrase}'")
-                            FeedbackHandler.play_error_chime()
+                            FeedbackHandler.rejected("Command not recognized.")
                     else:
                         print("[STATUS] Wake Word detected. Listening for command...")
+                        FeedbackHandler._beep()
 
     except KeyboardInterrupt:
         print("\n[SHUTDOWN] Stopping Voice Assistant...")
