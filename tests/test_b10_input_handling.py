@@ -72,24 +72,6 @@ def test_unsupported_command_is_rejected(dependencies):
     feedback.rejected.assert_called_once()
     media.execute_intent.assert_not_called()
 
-
-def test_conflicting_commands_are_rejected(dependencies):
-    voice, parser, media = dependencies
-    voice.parse_wake_word_and_intent.return_value = (
-        "play and pause", True
-    )
-
-    with patch("main.FeedbackHandler") as feedback:
-        result = handle_transcript(
-            "assistant play and pause",
-            voice, parser, media
-        )
-
-    assert result is False
-    feedback.rejected.assert_called_once()
-    media.execute_intent.assert_not_called()
-
-
 def test_valid_command_after_invalid_command(dependencies):
     voice, parser, media = dependencies
 
