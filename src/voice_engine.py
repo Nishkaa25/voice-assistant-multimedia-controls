@@ -1,7 +1,7 @@
-
 import json
 import os
 import sys
+import time
 
 try:
     from vosk import Model, KaldiRecognizer
@@ -11,14 +11,27 @@ except ImportError:
 
 
 class VoiceEngine:
-    def __init__(self, model_path="model", sample_rate=16000,
-                 wake_word="assistant"):
+    def __init__(
+        self,
+        model_path="model",
+        sample_rate=16000,
+        wake_word="assistant",
+        activation_timeout=5.0,
+    ):
         """
         Initialize the local, offline Vosk speech-recognition engine.
         """
         self.sample_rate = sample_rate
         self.wake_word = wake_word.lower()
+        self.activation_timeout = float(activation_timeout)
+
+        if self.activation_timeout <= 0:
+            raise ValueError(
+                "Activation timeout must be greater than zero."
+            )
+
         self.is_listening_for_command = False
+        self.activation_started_at = None
 
         if Model is None or KaldiRecognizer is None:
             raise RuntimeError(
@@ -78,25 +91,60 @@ class VoiceEngine:
 
     def parse_wake_word_and_intent(self, text_transcript):
         """
-        Require the wake word before accepting a command.
+        Validate wake-word activation before accepting a command.
+
+        The wake word must be the first word of an utterance.
+
+        If spoken alone, the next completed utterance is accepted
+        only within the configured activation timeout.
+
+        Activation is consumed after one subsequent utterance.
         """
-        if not text_transcript or not text_transcript.strip():
+        if (
+            not isinstance(text_transcript, str)
+            or not text_transcript.strip()
+        ):
             return None, False
 
         words = text_transcript.lower().split()
+        first_word = words[0].strip(".,!?;:")
+        current_time = time.monotonic()
 
-        if self.wake_word in words:
-            self.is_listening_for_command = True
-            wake_index = words.index(self.wake_word)
-            command_phrase = " ".join(words[wake_index + 1:])
+        # Wake word must appear at the beginning.
+        if first_word == self.wake_word:
+            self.is_listening_for_command = False
+            self.activation_started_at = None
 
             print(
                 f"[VOICE] Wake word '{self.wake_word.upper()}' detected."
             )
-            return command_phrase, True
 
+            command_phrase = " ".join(words[1:]).strip()
+
+            # Wake word and command in the same utterance.
+            if command_phrase:
+                return command_phrase, True
+
+            # Wake word alone starts a timed activation window.
+            self.is_listening_for_command = True
+            self.activation_started_at = current_time
+
+            return None, True
+
+        # A previous wake word may authorize one subsequent utterance.
         if self.is_listening_for_command:
-            self.is_listening_for_command = False
-            return text_transcript.strip().lower(), True
+            activation_time = self.activation_started_at
 
+            # Always consume the activation after this utterance.
+            self.is_listening_for_command = False
+            self.activation_started_at = None
+
+            if (
+                activation_time is not None
+                and current_time - activation_time
+                <= self.activation_timeout
+            ):
+                return text_transcript.strip().lower(), True
+
+        # No valid activation.
         return None, False
