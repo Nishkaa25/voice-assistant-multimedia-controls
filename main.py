@@ -10,6 +10,44 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def handle_transcript(
+    transcript,
+    voice_engine,
+    command_parser,
+    media_controller,
+):
+    """
+    Safely process one completed speech transcript.
+
+    Unsupported or inactive input must never execute a media action.
+    """
+    if not isinstance(transcript, str) or not transcript.strip():
+        return False
+
+    phrase, wake_detected = (
+        voice_engine.parse_wake_word_and_intent(transcript)
+    )
+
+    # Ignore speech without valid activation.
+    if not wake_detected:
+        return False
+
+    # Wake word detected, but no command yet.
+    if not phrase:
+        print("[STATUS] Wake Word detected. Listening for command...")
+        FeedbackHandler._beep()
+        return False
+
+    # Accept only explicitly supported commands.
+    intent = command_parser.parse_intent(phrase)
+
+    if intent is None:
+        FeedbackHandler.rejected("Command not recognized.")
+        return False
+
+    # Execute only a validated intent.
+    return bool(media_controller.execute_intent(intent))
+
 def main():
     print("==================================================")
     print(" Voice Assistant for MultiMedia Controls - Backlog 2")
@@ -66,21 +104,12 @@ def main():
             if transcript:
                 print(f"[TRANSCRIPT] Spoken Text: '{transcript}'")
 
-                # 3. Check for wake word & extract intent phrase
-                phrase, wake_detected = voice_engine.parse_wake_word_and_intent(transcript)
-
-                if wake_detected:
-                    if phrase:
-                        # 4. Parse intent from vocabulary map
-                        intent = command_parser.parse_intent(phrase)
-                        if intent:
-                            # 5. Execute OS media command
-                            media_controller.execute_intent(intent)
-                        else:
-                            FeedbackHandler.rejected("Command not recognized.")
-                    else:
-                        print("[STATUS] Wake Word detected. Listening for command...")
-                        FeedbackHandler._beep()
+                handle_transcript(
+                    transcript,
+                    voice_engine,
+                    command_parser,
+                    media_controller,
+                )
 
     except KeyboardInterrupt:
         print("\n[SHUTDOWN] Stopping Voice Assistant...")
