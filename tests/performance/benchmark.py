@@ -38,10 +38,13 @@ KEYWORDS = [
     (r"play", "PLAY"),
 ]
 
-FIELDS = ["trial", "time", "source", "speaker", "device", "noise_db", "backend",
-          "mode", "file", "expected", "transcript", "recognized", "correct",
-          "latency_s", "executed", "action_success"]
-
+FIELDS = [
+    "trial", "time", "source", "speaker", "device",
+    "noise_db", "backend", "mode", "file", "expected",
+    "transcript", "recognized", "correct",
+    "latency_s", "processing_latency_s",
+    "executed", "action_success"
+]
 
 # ---------------------------------------------------------------- live modes
 def make_plan(n):
@@ -160,70 +163,210 @@ def decode(path):
 
 
 def transcribe_pcm(engine, pcm):
+    """
+    Transcribe PCM audio and record when the final audio chunk
+    is passed to VoiceEngine.
+
+    The timestamp is used to measure synthetic command-processing
+    latency. Audio decoding is excluded.
+    """
     parts = []
-    step = 4000 * 2                                   # 4000 samples x 2 bytes
+    step = 4000 * 2  # 4000 samples x 2 bytes
+
+    if not pcm:
+        return "", None
+
+    last_chunk_received_at = None
+
     for i in range(0, len(pcm), step):
-        t = engine.process_audio_chunk(pcm[i:i + step])
-        if t:
-            parts.append(t)
-    t = engine.process_audio_chunk(b"\x00" * 32000)   # 1 s of silence to close the utterance
-    if t:
-        parts.append(t)
-    final = json.loads(engine.recognizer.FinalResult()).get("text", "").strip().lower()
-    if final:
-        parts.append(final)                           # FinalResult also resets the recognizer
-    return " ".join(parts)
+        chunk = pcm[i:i + step]
+
+        if not chunk:
+            continue
+
+        # Record the arrival time of the final actual audio chunk.
+        last_chunk_received_at = time.perf_counter()
+
+        transcript = engine.process_audio_chunk(chunk)
+
+        if transcript:
+            parts.append(transcript)
+
+    # Flush any remaining unfinished utterance.
+    final_result = json.loads(
+        engine.recognizer.FinalResult()
+    )
+
+    final_text = final_result.get("text", "").strip().lower()
+
+    if final_text:
+        parts.append(final_text)
+
+    transcript = " ".join(parts).strip()
+
+    return transcript, last_chunk_received_at
 
 
 def run_synthetic(n, folder):
+    from dotenv import load_dotenv
     from src.voice_engine import VoiceEngine
     from src.command_parser import CommandParser
+    from src.media_controller import MediaController
 
     if shutil.which("ffmpeg") is None:
-        sys.exit("ffmpeg not found. Install it (brew install ffmpeg) and retry.")
-    files = sorted(os.path.join(d, f) for d, _, fs in os.walk(folder)
-                   for f in fs if f.lower().endswith(AUDIO_EXT))
+        sys.exit("ffmpeg not found. Install it using: brew install ffmpeg")
+
+    files = sorted(
+        os.path.join(d, f)
+        for d, _, fs in os.walk(folder)
+        for f in fs
+        if f.lower().endswith(AUDIO_EXT)
+    )
+
     if not files:
         sys.exit(f"No audio files found in {folder}")
-    labelled = [(f, label_from_name(f)) for f in files]
-    skipped = [f for f, l in labelled if l is None]
-    labelled = [(f, l) for f, l in labelled if l]
 
-    print(f"\nFile -> expected command (inferred from the file name):")
-    for f, l in labelled:
-        print(f"  {os.path.relpath(f, folder):<50} {l}")
+    labelled = [(f, label_from_name(f)) for f in files]
+
+    skipped = [f for f, label in labelled if label is None]
+    labelled = [(f, label) for f, label in labelled if label]
+
+    print("\nFile -> expected command:")
+
+    for f, label in labelled:
+        print(f"  {os.path.relpath(f, folder):<50} {label}")
+
     if skipped:
-        print(f"\nExcluded (no command word in the name): {len(skipped)}")
+        print(f"\nExcluded files: {len(skipped)}")
+
         for f in skipped:
             print(f"  {os.path.relpath(f, folder)}")
+
     if input("\nAre these expected commands correct? (y/n): ").strip().lower() != "y":
-        sys.exit("Stopped. Fix KEYWORDS or rename files, then rerun.")
+        sys.exit("Stopped. Fix KEYWORDS or rename files.")
 
     random.shuffle(labelled)
     chosen = labelled[:n]
+
     if len(chosen) < n:
-        print(f"[WARNING] Only {len(chosen)} labelled files available, not {n}. "
-              f"Report the real count.")
+        print(
+            f"[WARNING] Only {len(chosen)} labelled files available, "
+            f"not {n}. Report the actual count."
+        )
 
-    engine = VoiceEngine(model_path="model", sample_rate=16000, wake_word="assistant")
+    load_dotenv()
+
+    backend = os.getenv("MEDIA_BACKEND", "os").lower()
+
+    print(f"\n[CONFIG] Media backend: {backend.upper()}")
+
+    print(
+        "\nWARNING: Synthetic benchmarking will execute actual "
+        "media commands on your configured backend."
+    )
+
+    if input("Continue with media command execution? (y/n): ").strip().lower() != "y":
+        sys.exit("Benchmark cancelled.")
+
+    engine = VoiceEngine(
+        model_path="model",
+        sample_rate=16000,
+        wake_word="assistant"
+    )
+
     parser = CommandParser()
-    rows = []
-    for i, (path, expected) in enumerate(chosen, 1):
-        transcript = transcribe_pcm(engine, decode(path))
-        phrase, wake = engine.parse_wake_word_and_intent(transcript) if transcript else ("", False)
-        intent = parser.parse_intent(phrase) if (wake and phrase) else None
-        correct = "1" if intent and str(intent).upper() == expected else "0"
-        print(f"  [{i}/{len(chosen)}] {os.path.basename(path)}: heard='{transcript}' "
-              f"intent={intent} correct={correct}")
-        rows.append({"trial": i, "time": datetime.now().isoformat(timespec="seconds"),
-                     "source": "synthetic", "speaker": "synthetic TTS",
-                     "device": "direct file input (no microphone)", "noise_db": "n/a",
-                     "backend": "n/a", "mode": "synthetic", "file": os.path.relpath(path),
-                     "expected": expected, "transcript": transcript,
-                     "recognized": intent or "", "correct": correct,
-                     "latency_s": "", "executed": "", "action_success": ""})
-    write_csv(rows, "synthetic", "files")
+    media = MediaController(backend=backend)
 
+    rows = []
+
+    try:
+        for i, (path, expected) in enumerate(chosen, 1):
+
+            # Decode audio BEFORE starting the latency measurement.
+            pcm = decode(path)
+
+            # Transcribe audio and capture final chunk arrival time.
+            transcript, last_chunk_received_at = transcribe_pcm(
+                engine, pcm
+            )
+
+            # Wake-word detection.
+            phrase, wake = (
+                engine.parse_wake_word_and_intent(transcript)
+                if transcript else ("", False)
+            )
+
+            # Command parsing.
+            intent = (
+                parser.parse_intent(phrase)
+                if wake and phrase else None
+            )
+
+            correct = (
+                "1"
+                if intent and str(intent).upper() == expected
+                else "0"
+            )
+
+            # Execute the recognized command.
+            executed = ""
+
+            if intent:
+                executed = (
+                    "1"
+                    if media.execute_intent(intent)
+                    else "0"
+                )
+
+            # Stop timing AFTER command processing/execution returns.
+            processing_latency = ""
+
+            if last_chunk_received_at is not None:
+                processing_latency = (
+                    time.perf_counter() - last_chunk_received_at
+                )
+
+            latency_value = (
+                f"{processing_latency:.6f}"
+                if processing_latency != ""
+                else ""
+            )
+
+            print(
+                f"  [{i}/{len(chosen)}] "
+                f"{os.path.basename(path)}: "
+                f"heard='{transcript}' "
+                f"intent={intent} "
+                f"correct={correct} "
+                f"executed={executed} "
+                f"processing_latency={latency_value}s"
+            )
+
+            rows.append({
+                "trial": i,
+                "time": datetime.now().isoformat(timespec="seconds"),
+                "source": "synthetic",
+                "speaker": "synthetic TTS",
+                "device": "direct file input (no microphone)",
+                "noise_db": "n/a",
+                "backend": backend,
+                "mode": "synthetic",
+                "file": os.path.relpath(path),
+                "expected": expected,
+                "transcript": transcript,
+                "recognized": intent or "",
+                "correct": correct,
+                "latency_s": "",
+                "processing_latency_s": latency_value,
+                "executed": executed,
+                "action_success": ""
+            })
+
+    finally:
+        # Release media backend resources.
+        media.close()
+
+        write_csv(rows, "synthetic", "files")
 
 # -------------------------------------------------------------------- summary
 def read(pattern):
@@ -254,29 +397,115 @@ def per_command(rows):
 def summary():
     acc = read("accuracy_*.csv") + read("synthetic_*.csv")
     lat = read("latency_*.csv")
+    synthetic = read("synthetic_*.csv")
+
     if acc:
         print("Recognition accuracy (target >= 90%):")
-        for src in sorted({r.get("source") or "human" for r in acc}):
-            acc_line(src, [r for r in acc if (r.get("source") or "human") == src])
+
+        for src in sorted({
+            r.get("source") or "human" for r in acc
+        }):
+            acc_line(
+                src,
+                [
+                    r for r in acc
+                    if (r.get("source") or "human") == src
+                ]
+            )
+
         acc_line("ALL", acc)
-        print("  Speakers:", sorted({r["speaker"] for r in acc}),
-              "| Noise (dB):", sorted({r["noise_db"] for r in acc}))
+
+        print(
+            "  Speakers:", sorted({r["speaker"] for r in acc}),
+            "| Noise (dB):", sorted({r["noise_db"] for r in acc})
+        )
+
         print("  Per command (all sources):")
         per_command(acc)
+
+    # Live end-to-end latency.
     if lat:
-        times = [float(r["latency_s"]) for r in lat if r["latency_s"] and r["correct"] == "1"]
+        times = [
+            float(r["latency_s"])
+            for r in lat
+            if r["latency_s"] and r["correct"] == "1"
+        ]
+
         if times:
-            print(f"Latency over {len(times)} correctly recognized trials: "
-                  f"p90 = {pct90(times):.3f}s (target <= 1.5s), "
-                  f"mean = {sum(times) / len(times):.3f}s, max = {max(times):.3f}s")
-        print(f"Latency trials: {len(lat)} total | no command recognized: "
-              f"{sum(1 for r in lat if not r['recognized'])} | "
-              f"wrong command: {sum(1 for r in lat if r['recognized'] and r['correct'] != '1')}")
-        print(f"execute_intent returned True: {sum(r['executed'] == '1' for r in lat)}/{len(lat)}")
-        print(f"Media action actually happened (your y/n): "
-              f"{sum(r['action_success'] == 'y' for r in lat)}/{len(lat)}")
+            print(
+                f"\nLive latency over {len(times)} correctly recognized trials:"
+                f" p90 = {pct90(times):.3f}s"
+                f", mean = {sum(times) / len(times):.3f}s"
+                f", max = {max(times):.3f}s"
+            )
+
+        print(
+            f"Latency trials: {len(lat)} total"
+            f" | no command recognized: "
+            f"{sum(1 for r in lat if not r['recognized'])}"
+            f" | wrong command: "
+            f"{sum(1 for r in lat if r['recognized'] and r['correct'] != '1')}"
+        )
+
+        print(
+            f"execute_intent returned True: "
+            f"{sum(r['executed'] == '1' for r in lat)}/{len(lat)}"
+        )
+
+        print(
+            f"Media action actually happened (your y/n): "
+            f"{sum(r['action_success'] == 'y' for r in lat)}/{len(lat)}"
+        )
+
         print("  Backend:", sorted({r["backend"] for r in lat}))
 
+    # Synthetic command-processing latency.
+    synthetic_times = [
+        float(r["processing_latency_s"])
+        for r in synthetic
+        if r.get("processing_latency_s")
+    ]
+
+    if synthetic_times:
+        print(
+            "\nSynthetic command-processing latency "
+            "(final PCM chunk -> processing/execution completion):"
+        )
+
+        print(f"  Measured trials: {len(synthetic_times)}")
+
+        print(
+            f"  p90: {pct90(synthetic_times):.6f}s"
+        )
+
+        print(
+            f"  Mean: "
+            f"{sum(synthetic_times) / len(synthetic_times):.6f}s"
+        )
+
+        print(
+            f"  Maximum: {max(synthetic_times):.6f}s"
+        )
+
+        print(
+            "  Note: Audio decoding and microphone capture are excluded. "
+            "This is not directly comparable to live NF-1 latency."
+        )
+
+    executed_rows = [
+        r for r in synthetic
+        if r.get("executed") in ("0", "1")
+    ]
+
+    if executed_rows:
+        successful = sum(
+            r["executed"] == "1" for r in executed_rows
+        )
+
+        print(
+            f"\nSynthetic execute_intent returned True: "
+            f"{successful}/{len(executed_rows)}"
+        )
 
 if __name__ == "__main__":
     a = sys.argv[1:]
