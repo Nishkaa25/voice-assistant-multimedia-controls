@@ -242,9 +242,6 @@ def run_synthetic(n, folder):
         for f in skipped:
             print(f"  {os.path.relpath(f, folder)}")
 
-    if input("\nAre these expected commands correct? (y/n): ").strip().lower() != "y":
-        sys.exit("Stopped. Fix KEYWORDS or rename files.")
-
     random.shuffle(labelled)
     chosen = labelled[:n]
 
@@ -260,13 +257,6 @@ def run_synthetic(n, folder):
 
     print(f"\n[CONFIG] Media backend: {backend.upper()}")
 
-    print(
-        "\nWARNING: Synthetic benchmarking will execute actual "
-        "media commands on your configured backend."
-    )
-
-    if input("Continue with media command execution? (y/n): ").strip().lower() != "y":
-        sys.exit("Benchmark cancelled.")
 
     engine = VoiceEngine(
         model_path="model",
