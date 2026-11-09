@@ -12,9 +12,9 @@ COMMANDS = {
     "volume_up": "volume up",
     "volume_down": "volume down",
     "mute": "mute",
-    "unmute": "unmute",
+    "unmute": "[[ ʌnmjˈuːt ]]",
     "quiet": "quiet",
-    "speak": "speak",
+    "speak": "[[ spˈiːk ]]",
     "next": "next",
     "previous": "previous",
 }
