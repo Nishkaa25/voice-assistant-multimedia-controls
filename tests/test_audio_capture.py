@@ -8,9 +8,13 @@ from src.audio_capture import AudioCapturer
 
 
 @pytest.fixture
-def capturer():
-    return AudioCapturer()
+def mock_audio():
+    return Mock()
 
+
+@pytest.fixture
+def capturer(mock_audio):
+    return AudioCapturer(audio_module=mock_audio)
 
 # Initialization
 
@@ -81,13 +85,12 @@ def test_callback_handles_full_queue(capturer):
 
 # Stream startup
 
-@patch("src.audio_capture.sd.RawInputStream")
-def test_start_stream_success(mock_raw_stream, capturer):
-    stream = mock_raw_stream.return_value
+def test_start_stream_success(capturer, mock_audio):
+    stream = mock_audio.RawInputStream.return_value
 
     assert capturer.start_stream() is True
 
-    mock_raw_stream.assert_called_once_with(
+    mock_audio.RawInputStream.assert_called_once_with(
         samplerate=16000,
         blocksize=4000,
         dtype="int16",
@@ -100,18 +103,14 @@ def test_start_stream_success(mock_raw_stream, capturer):
     assert capturer.is_running is True
 
 
-@patch("src.audio_capture.sd.RawInputStream")
-def test_start_stream_failure(mock_raw_stream, capturer):
-    mock_raw_stream.side_effect = RuntimeError("Device unavailable")
+def test_start_stream_failure(capturer, mock_audio):
+    mock_audio.RawInputStream.side_effect = RuntimeError("Device unavailable")
 
     assert capturer.start_stream() is False
     assert capturer.is_running is False
 
 
-@patch("src.audio_capture.sd.RawInputStream")
-def test_start_stream_stops_existing_stream(
-    mock_raw_stream, capturer
-):
+def test_start_stream_stops_existing_stream(capturer, mock_audio):
     old_stream = Mock()
     capturer.stream = old_stream
     capturer.is_running = True
@@ -120,6 +119,7 @@ def test_start_stream_stops_existing_stream(
 
     old_stream.stop.assert_called_once()
     old_stream.close.assert_called_once()
+
 
 
 # Audio retrieval
@@ -146,9 +146,9 @@ def test_get_audio_chunk_timeout_restarts_running_stream(capturer):
 
 # Stream recovery
 
-@patch("src.audio_capture.sd.RawInputStream")
-def test_restart_stream_calls_start_stream(mock_raw_stream, capturer):
-    stream = mock_raw_stream.return_value
+
+def test_restart_stream_calls_start_stream(capturer, mock_audio):
+    stream = mock_audio.RawInputStream.return_value
 
     capturer.restart_stream()
 

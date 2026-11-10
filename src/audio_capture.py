@@ -1,9 +1,8 @@
 import sys
 import queue
-import sounddevice as sd
 
 class AudioCapturer:
-    def __init__(self, sample_rate=16000, blocksize=4000, channels=1):
+    def __init__(self, sample_rate=16000, blocksize=4000, channels=1, audio_module=None):
         """
         FR-01: Continuous Microphone Audio Capturer with Device-Disconnect Auto-Recovery.
         - sample_rate: 16000 Hz (Standard input rate for Vosk)
@@ -16,6 +15,7 @@ class AudioCapturer:
         self.audio_queue = queue.Queue()
         self.stream = None
         self.is_running = False
+        self.audio_module = audio_module
 
     def _audio_callback(self, indata, frames, time_info, status):
         """Internal callback invoked by sounddevice when new mic audio arrives."""
@@ -33,9 +33,15 @@ class AudioCapturer:
 
     def start_stream(self):
         """Starts the background non-blocking microphone stream."""
+
+        audio_module = self.audio_module
+
+        if audio_module is None:
+            import sounddevice as audio_module
+
         self.stop_stream()
         try:
-            self.stream = sd.RawInputStream(
+            self.stream = audio_module.RawInputStream(
                 samplerate=self.sample_rate,
                 blocksize=self.blocksize,
                 dtype='int16',
