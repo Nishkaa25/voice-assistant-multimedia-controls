@@ -1,0 +1,109 @@
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Unit, Integration and E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      VLC_HTTP_URL: http://127.0.0.1:8081
+      VLC_HTTP_PASSWORD: ci-test-password
+      PYTHONUNBUFFERED: 1
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ffmpeg \
+            libportaudio2 \
+            portaudio19-dev \
+            libgl1 \
+            libglib2.0-0 \
+            vlc \
+            xvfb
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Start VLC HTTP server
+        run: |
+          cvlc \
+            --no-video \
+            --intf dummy \
+            --extraintf http \
+            --http-host 127.0.0.1 \
+            --http-port 8081 \
+            --http-password "$VLC_HTTP_PASSWORD" \
+            > "$RUNNER_TEMP/vlc.log" 2>&1 &
+
+          echo $! > "$RUNNER_TEMP/vlc.pid"
+
+          for i in {1..30}; do
+            if curl -fsS \
+              -u ":$VLC_HTTP_PASSWORD" \
+              "$VLC_HTTP_URL/requests/status.json" \
+              > /dev/null; then
+              echo "VLC HTTP server is ready."
+              exit 0
+            fi
+
+            if ! kill -0 "$(cat "$RUNNER_TEMP/vlc.pid")" 2>/dev/null; then
+              echo "VLC process exited unexpectedly."
+              cat "$RUNNER_TEMP/vlc.log"
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          echo "VLC failed to start."
+          cat "$RUNNER_TEMP/vlc.log"
+          exit 1
+
+      - name: Run unit tests
+        run: |
+          xvfb-run -a python -m pytest -v tests/test_*.py
+
+      - name: Run VLC integration tests
+        run: |
+          xvfb-run -a python -m pytest -v tests/integration/
+
+      - name: Run end-to-end tests
+        run: |
+          xvfb-run -a python -m pytest -v tests/e2e/
+
+      - name: Stop VLC
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/vlc.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/vlc.pid")" 2>/dev/null || true
+          fi
+
+      - name: Upload VLC logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vlc-logs
+          path: ${{ runner.temp }}/vlc.log
+          if-no-files-found: ignore
