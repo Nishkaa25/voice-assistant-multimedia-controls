@@ -1,20 +1,23 @@
 import os
 import sys
 import time
+from dotenv import load_dotenv
 from src.audio_capture import AudioCapturer
 from src.voice_engine import VoiceEngine
 from src.command_parser import CommandParser
 from src.media_controller import MediaController
 from src.feedback_handler import FeedbackHandler
-from dotenv import load_dotenv
+from src.command_logger import CommandLogger  # 1. Import CommandLogger
 
 load_dotenv()
+
 
 def handle_transcript(
     transcript,
     voice_engine,
     command_parser,
     media_controller,
+    command_logger=None,  # 2. Optional parameter preserves backward compatibility
 ):
     """
     Safely process one completed speech transcript.
@@ -23,6 +26,8 @@ def handle_transcript(
     """
     if not isinstance(transcript, str) or not transcript.strip():
         return False
+
+    start_time = time.perf_counter()  # 3. Start execution latency timer
 
     phrase, wake_detected = (
         voice_engine.parse_wake_word_and_intent(transcript)
@@ -38,15 +43,39 @@ def handle_transcript(
         FeedbackHandler._beep()
         return False
 
+    source_tag = f"voice:{getattr(media_controller, 'backend', 'os')}"
+
     # Accept only explicitly supported commands.
     intent = command_parser.parse_intent(phrase)
 
     if intent is None:
         FeedbackHandler.rejected("Command not recognized.")
+        if command_logger is not None:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            command_logger.log_event(
+                command="UNRECOGNIZED",
+                source=source_tag,
+                status="FAILURE",
+                latency_ms=elapsed_ms,
+                error_code="ERR_UNRECOGNIZED_CMD",
+            )
         return False
 
     # Execute only a validated intent.
-    return bool(media_controller.execute_intent(intent))
+    success = bool(media_controller.execute_intent(intent))
+
+    if command_logger is not None:
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
+        command_logger.log_event(
+            command=intent,
+            source=source_tag,
+            status="SUCCESS" if success else "FAILURE",
+            latency_ms=elapsed_ms,
+            error_code=None if success else "ERR_EXECUTION_FAILED",
+        )
+
+    return success
+
 
 def main():
     print("==================================================")
@@ -57,7 +86,7 @@ def main():
     print(" Press Ctrl+C to exit")
     print("==================================================\n")
 
-        # Initialize modules
+    # Initialize modules
     try:
         voice_engine = VoiceEngine(
             model_path="model",
@@ -82,6 +111,7 @@ def main():
         sys.exit(1)
 
     command_parser = CommandParser()
+    command_logger = CommandLogger()  # 4. Initialize rotating metadata logger
     media_backend = os.getenv("MEDIA_BACKEND", "os").lower()
     print(f"[CONFIG] Media backend: {media_backend.upper()}")
 
@@ -109,14 +139,16 @@ def main():
                     voice_engine,
                     command_parser,
                     media_controller,
+                    command_logger=command_logger,  # 5. Pass logger into handler
                 )
 
     except KeyboardInterrupt:
         print("\n[SHUTDOWN] Stopping Voice Assistant...")
     finally:
         audio_capturer.stop_stream()
-        media_controller.close() #release VLC instance upon application exit
+        media_controller.close()  # release VLC instance upon application exit
         print("[SHUTDOWN] Clean exit complete.")
+
 
 if __name__ == "__main__":
     main()
