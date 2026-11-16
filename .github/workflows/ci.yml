@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 25
 
     env:
-      VLC_HTTP_URL: http://127.0.0.1:8081
+      VLC_HTTP_URL: http://127.0.0.1:8080
       VLC_HTTP_PASSWORD: ci-test-password
       PYTHONUNBUFFERED: 1
 
