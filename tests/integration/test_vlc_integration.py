@@ -10,7 +10,7 @@ from src.media_backends.vlc_backend import VLCBackend
 
 
 # Configuration
-BASE_URL = os.getenv("VLC_HTTP_URL", "http://127.0.0.1:8081").rstrip("/")
+BASE_URL = os.getenv("VLC_HTTP_URL", "http://127.0.0.1:8080").rstrip("/")
 PASSWORD = os.getenv("VLC_HTTP_PASSWORD")
 
 AUDIO_DIR = Path(__file__).parents[1] / "fixtures" / "audio"
