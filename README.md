@@ -7,10 +7,12 @@ control of multimedia playback through voice commands.
 
 ## Team Members
 
-- C K Gagan Gowda
-- Anudeepak Anpuraja
-- Nishkaa V
-- Ishanika Vinuthan
+| Name | SRN |
+|---|---|
+| C K Gagan Gowda | PES2UG24CS124 |
+| Anudeepak Anpuraja | PES2UG24CS905 |
+| Nishkaa V | PES2UG24CS907 |
+| Ishanika Vinuthan | PES2UG24CS911 |
 
 ## Features
 
