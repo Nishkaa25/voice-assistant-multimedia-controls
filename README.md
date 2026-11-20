@@ -17,19 +17,14 @@ The assistant uses a wake word to activate command processing and provides audio
 
 ## Features
 
-- **Wake-word activation:** Listens for the wake word `ASSISTANT` before processing multimedia commands.
-- **Offline speech recognition:** Uses the Vosk speech recognition engine to convert spoken input into text locally.
-- **Playback control:** Supports playing, pausing, stopping and resuming media playback.
-- **Volume control:** Allows users to increase and decrease the playback volume.
-- **Mute and unmute:** Supports muting and restoring audio, including retaining the previous volume level.
-- **Track navigation:** Supports moving to the next or previous track in the playlist.
-- **Playlist management:** Supports playlist navigation and looping through the VLC media backend.
-- **Flexible media control:** Supports VLC-based control through its local HTTP interface and operating-system media controls.
-- **Command recognition:** Maps different spoken phrases to predefined commands using an intent-based command parser.
-- **Audio feedback:** Provides success and error chimes to indicate whether a command was executed or could not be recognized.
-- **Error handling:** Handles unrecognized commands, invalid media actions, audio stream interruptions and startup failures.
-- **Microphone recovery:** Includes handling for audio stream interruptions and attempts to restore microphone capture.
-- **Local processing:** Speech recognition and command interpretation run locally, supporting offline operation and user privacy.
+- Wake-word activation using `ASSISTANT`.
+- Offline speech recognition using Vosk.
+- Voice-controlled playback, volume and mute controls.
+- Next and previous track navigation.
+- VLC integration with playlist looping and operating-system media controls.
+- Command recognition with audio feedback.
+- Error handling for unrecognized commands and audio interruptions.
+- Local processing without cloud-based speech recognition.
 
 ## Implementation and System Workflow
 
